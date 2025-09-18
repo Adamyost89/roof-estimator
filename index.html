@@ -249,8 +249,7 @@ Notes
     }
 
     // Injected at build time or from server. Set here for dev simplicity.
-    const GOOGLE_MAPS_KEY_FROM_HTML = '${process.env.GOOGLE_MAPS_KEY || 'AIzaSyDPFfmUD6XSU67KIUiRL0gdgO7B-vauuQw'}';
+    const GOOGLE_MAPS_KEY_FROM_HTML = 'AIzaSyDPFfmUD6XSU67KIUiRL0gdgO7B-vauuQw';
   </script>
-  <script async src="https://maps.googleapis.com/maps/api/js?key=${process.env.GOOGLE_MAPS_KEY || 'AIzaSyDPFfmUD6XSU67KIUiRL0gdgO7B-vauuQw'}&libraries=geometry"></script>
-</body>
+  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDPFfmUD6XSU67KIUiRL0gdgO7B-vauuQw&libraries=geometry"></script>
 </html>
