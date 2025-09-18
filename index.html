@@ -1,0 +1,101 @@
+<!-- ========================= index.html ========================= -->
+const pts = polygon.getPath().getArray();
+const areaM2 = google.maps.geometry.spherical.computeArea(pts);
+areaFt2Base = areaM2 * 10.7639;
+const squares = areaFt2Base * 1.12 / 100; // includes a gentle default pitch factor
+document.getElementById('est').textContent = `Size ${squares.toFixed(1)} squares`;
+document.getElementById('pit').textContent = `Pitch ${pitchText}`;
+}
+
+
+async function trySolarThenVision(lat, lng){
+// 1 Solar
+try{
+const res = await fetch(`/api/solar?lat=${lat}&lng=${lng}`);
+if (res.ok){
+const data = await res.json();
+if (data && data.polygon && Array.isArray(data.polygon) && data.polygon.length >= 3){
+const ring = data.polygon.map(([y,x]) => new google.maps.LatLng(y, x)); // GeoJSON order
+drawPolygonLatLng(ring);
+if (data.pitchCategory) pitchText = data.pitchCategory;
+return;
+}
+}
+}catch{}
+
+
+// 2 Vision fallback
+const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
+url.searchParams.set('key', GOOGLE_MAPS_KEY_FROM_HTML);
+url.searchParams.set('center', `${lat},${lng}`);
+url.searchParams.set('zoom', '21');
+url.searchParams.set('size', '640x640');
+url.searchParams.set('maptype', 'satellite');
+url.searchParams.set('scale', '1');
+const staticUrl = url.toString();
+
+
+const vres = await fetch('/api/vision', {
+method:'POST', headers:{ 'Content-Type':'application/json' },
+body: JSON.stringify({ lat, lng, zoom:21, size:640, imageUrl: staticUrl })
+});
+if (!vres.ok){ drawFallbackRect(lat, lng); return; }
+const vjson = await vres.json();
+if (vjson && vjson.type === 'Feature' && vjson.geometry?.type === 'Polygon'){
+const coords = vjson.geometry.coordinates[0];
+const ring = coords.map(([x,y]) => new google.maps.LatLng(y, x));
+drawPolygonLatLng(ring);
+if (vjson.properties?.pitchCategory) pitchText = vjson.properties.pitchCategory;
+} else {
+drawFallbackRect(lat, lng);
+}
+}
+
+
+function drawFallbackRect(lat, lng){
+const d = 0.00012;
+const ring = [
+{ lat:lat-d, lng:lng-d }, { lat:lat-d, lng:lng+d }, { lat:lat+d, lng:lng+d }, { lat:lat+d, lng:lng-d }
+].map(o => new google.maps.LatLng(o.lat, o.lng));
+drawPolygonLatLng(ring);
+}
+
+
+async function loadMaterials(){
+try{
+const r = await fetch(MATERIALS_URL, { cache:'no-store' });
+const rows = await r.json();
+if (Array.isArray(rows) && rows.length) return rows;
+}catch{}
+return [
+{ id:'asphalt', name:'Asphalt', img:'https://images.unsplash.com/photo-1613977257597-38b7f5f2bd1a?q=80&w=1200&auto=format&fit=crop', pricePerSq:550, apr:9.99, term:120 },
+{ id:'metal', name:'Standing Seam', img:'https://images.unsplash.com/photo-1601914971419-6b2aaf9ce1ef?q=80&w=1200&auto=format&fit=crop', pricePerSq:1200, apr:8.99, term:180 }
+];
+}
+
+
+function renderMaterials(items){
+const box = document.getElementById('matGrid');
+box.innerHTML = '';
+const squares = (areaFt2Base * 1.12) / 100;
+for (const m of items){
+const low = Math.round(squares * Math.round((m.pricePerSqLow || m.pricePerSq*0.9) || 0));
+const high= Math.round(squares * Math.round((m.pricePerSqHigh || m.pricePerSq*1.1) || 0));
+const apr = Number(m.apr || 0) / 1200;
+const n = Number(m.term || 120);
+const pmt = apr>0 ? Math.round(high * (apr*Math.pow(1+apr,n))/(Math.pow(1+apr,n)-1)) : Math.round(high/n);
+const el = document.createElement('div'); el.className = 'tile';
+el.innerHTML = `
+<img src="${m.img}" alt="${m.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1613977257597-38b7f5f2bd1a?q=80&w=1200&auto=format&fit=crop'"/>
+<div class="body">
+<div style="font-weight:700; color:#176174;">${m.name}</div>
+<div>Cash $${low.toLocaleString()} to $${high.toLocaleString()}</div>
+<div>Finance $${pmt.toLocaleString()}/mo</div>
+<button class="btn" style="margin-top:8px" onclick="window.open('${BOOKING_URL}','_blank')">Schedule inspection</button>
+</div>`;
+el.addEventListener('click', () => {
+document.querySelectorAll('.tile').forEach(t => t.classList.remove('selected'));
+el.classList.add('selected');
+});
+box.appendChild(el);
+</html>
